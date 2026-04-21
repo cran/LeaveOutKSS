@@ -1,0 +1,230 @@
+---
+title: "LeaveOutKSS Overview"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{LeaveOutKSS Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Overview
+
+`LeaveOutKSS` is an 'R' translation of the leave-out variance-component
+workflow for two-way fixed effects models associated with Kline, Saggio, and
+Solvsten (2020). The package follows the same broad logic described in the
+repository README and in the original 'MATLAB' vignette:
+
+1. start from worker identifiers, firm identifiers, and an outcome;
+2. restrict the sample to a connected mobility graph;
+3. prune further to a leave-one-worker-out connected set;
+4. optionally partial out controls;
+5. compute leverage-based bias adjustments exactly or by
+   Johnson-Lindenstrauss approximation (JLA);
+6. report plug-in and bias-corrected variance components.
+
+The examples in this package currently rely on the small bundled panel used by
+the repository's `01_basic_no_controls.R` example.
+
+# Abowd, Kramarz, and Margolis (1999; AKM) Setup
+
+The target application is the familiar Abowd, Kramarz, and Margolis (1999;
+AKM)-style model
+
+\[
+y_{gt} = \alpha_g + \psi_{j(g,t)} + w'_{gt}\delta + \varepsilon_{gt},
+\]
+
+where `id` indexes workers, `firmid` indexes firms, and `controls` can be used
+for observed covariates such as year effects. The main quantities of interest
+are the variance of firm effects, the covariance of worker and firm effects,
+and the variance of worker effects.
+
+The Kline, Saggio, and Solvsten (KSS) correction matters because plug-in
+variance decompositions treat estimated fixed effects as if they were measured
+without error. The leave-out approach instead uses observation-specific
+leverage adjustments to remove the leading bias from these variance-component
+estimates.
+
+# Bundled Example Data
+
+```{r}
+path <- system.file("extdata", "test.csv", package = "LeaveOutKSS")
+dt <- data.table::fread(path, header = FALSE)
+data.table::setorder(dt, V1, V3)
+dim(dt)
+head(dt)
+```
+
+The bundled file follows the layout used in the repository examples:
+
+- column 1: worker identifier
+- column 2: firm identifier
+- column 3: year
+- column 4: outcome
+
+Before calling `leave_out_KSS()` or `leave_out_KSS_fe()`, sort the panel by
+worker identifier and, within worker, from earlier to later time periods.
+
+# Main Workflow
+
+The basic decomposition is performed by `leave_out_KSS()`.
+
+```{r eval = FALSE}
+res <- leave_out_KSS(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  leave_out_level = "matches",
+  type_algorithm = "JLA",
+  simulations_JLA = 5,
+  paral = FALSE,
+  progress = FALSE
+)
+
+print(res)
+res$estimates$table
+```
+
+The routine returns an object whose main elements are:
+
+- `res$estimates$table`: biased and bias-corrected decomposition estimates
+- `res$effects`: estimated worker and firm effects in the original identifier
+  space
+
+If you want files, you can export them explicitly:
+
+```{r eval = FALSE}
+stem <- tempfile("leaveoutkss_")
+
+leave_out_KSS(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  simulations_JLA = 5,
+  paral = FALSE,
+  csv_file = paste0(stem, ".csv"),
+  txt_file = paste0(stem, ".txt"),
+  progress = FALSE
+)
+
+unlink(paste0(stem, c(".csv", ".txt")))
+```
+
+# Controls
+
+The original vignette emphasizes that controls are handled by partialling them
+out in the leave-out connected set and then running the decomposition on the
+residualized outcome. In R, one way to do this is to pass a control matrix
+directly.
+
+```{r eval = FALSE}
+controls <- model.matrix(~ factor(dt[[3]]) - 1)
+controls <- controls[, -ncol(controls), drop = FALSE]
+
+leave_out_KSS(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  controls = controls,
+  simulations_JLA = 5,
+  paral = FALSE,
+  progress = FALSE
+)
+```
+
+If a control is more naturally supplied as a coded categorical variable,
+`leave_out_KSS_fe()` can expand selected columns internally:
+
+```{r eval = FALSE}
+leave_out_KSS_fe(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  controls = cbind(year = dt[[3]]),
+  absorb_col = 1,
+  simulations_JLA = 5,
+  paral = FALSE,
+  progress = FALSE
+)
+```
+
+# Leaving Out Matches or Observations
+
+The default `leave_out_level = "matches"` follows the discussion in the
+original vignette: it is intended to be robust to unrestricted
+heteroskedasticity and serial correlation within worker-firm matches. Setting
+`leave_out_level = "obs"` switches the correction to leaving out single
+person-year observations instead.
+
+```{r eval = FALSE}
+leave_out_KSS(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  leave_out_level = "obs",
+  simulations_JLA = 5,
+  paral = FALSE,
+  progress = FALSE
+)
+```
+
+# Regressing Firm Effects on Observables
+
+The 'MATLAB' vignette also discusses linear projections of estimated firm
+effects on observables. In this package, that workflow is exposed through the
+`lincom_do`, `Z_lincom`, and `labels_lincom` arguments of `leave_out_KSS()`,
+which call `lincom_KSS()` internally.
+
+```{r eval = FALSE}
+region_dummy <- as.numeric(dt[[3]] <= median(dt[[3]], na.rm = TRUE))
+
+leave_out_KSS(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  simulations_JLA = 5,
+  paral = FALSE,
+  lincom_do = 1,
+  Z_lincom = region_dummy,
+  labels_lincom = list("Early-Year Indicator"),
+  progress = FALSE
+)
+```
+
+# R-Squared Companion
+
+`rsquared_comp()` compares the fit of the standard two-way fixed effects design
+with a saturated worker-firm interaction model.
+
+```{r eval = FALSE}
+rsquared_comp(
+  y = dt[[4]],
+  id = dt[[1]],
+  firmid = dt[[2]],
+  progress = FALSE
+)
+```
+
+# Notes on Current Scope
+
+At this stage, package documentation and examples intentionally rely on the
+small bundled dataset rather than the large-data workflow from the repository's
+`04_large_no_controls.R`. The computational shortcuts for large datasets are
+still reflected in the application programming interface (API), especially the
+Johnson-Lindenstrauss approximation (JLA)-based leverage routines, but the
+documentation examples focus on the small reproducible panel.
+
+# References
+
+Abowd, J. M., Kramarz, F., and Margolis, D. N. (1999). High wage workers and
+high wage firms. *Econometrica*, 67(2), 251-333.
+
+Kline, P., Saggio, R., and Solvsten, M. (2020). Leave-out estimation of
+variance components. *Econometrica*, 88(5), 1859-1898.
