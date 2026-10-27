@@ -316,7 +316,7 @@ leave_out_KSS_fe <- function(y, id, firmid,
     
     
     # Solving for beta
-    b <- sanic::solve_cg(a = xx, b = xy, type = "CG", iter = 1000, tol = 1e-10, precond = 2, verbose = FALSE)
+    b <- sanic::solve_cg(a = xx, b = xy, type = "CG", iter = min(1000L, max(dim(xx))), tol = 1e-10, precond = 2, verbose = FALSE)
     b <- as.vector(b)
     
     
@@ -439,7 +439,7 @@ leave_out_KSS_fe <- function(y, id, firmid,
   xy <- t(X) %*% y
   
   # Execute the Conjugate Gradient solver and add debugging message
-  b <- sanic::solve_cg(a = xx, b = as.vector(xy), type = "CG", iter = 1000, tol = 1e-10, precond = 2, verbose = FALSE)
+  b <- sanic::solve_cg(a = xx, b = as.vector(xy), type = "CG", iter = min(1000L, max(dim(xx))), tol = 1e-10, precond = 2, verbose = FALSE)
 
   
   # Residual calculation and KSS estimate

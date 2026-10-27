@@ -40,7 +40,7 @@ leverages <- function(X_fe, X_pe, X, xx, type_algorithm, scale,
   Mii_sq <- rep(0, NT)
   Pii_Mii <- rep(0, NT)
 
-  numIterations <- 300
+  numIterations <- min(300L, max(dim(xx)))
   tol <- 1e-6
 
   if (type_algorithm == 'exact') {
@@ -58,9 +58,11 @@ leverages <- function(X_fe, X_pe, X, xx, type_algorithm, scale,
           xtilde <- sanic::solve_cg(a = xx, b = as.vector(X[i, , drop=FALSE]), type = "CG", iter = numIterations, tol = tol, precond = 2, verbose = FALSE)
 
           Pii_i <- as.numeric(X[i,] %*% xtilde)
-          Bii_fe_i <- as.numeric(crossprod(X_fe %*% xtilde - mean(X_fe %*% xtilde)) / (nrow(X_fe) - 1))
-          Bii_pe_i <- as.numeric(crossprod(X_pe %*% xtilde - mean(X_pe %*% xtilde)) / (nrow(X_pe) - 1))
-          Bii_cov_i <- as.numeric(crossprod(X_pe %*% xtilde - mean(X_fe %*% xtilde)) / (nrow(X_pe) - 1))
+          v_fe <- as.vector(X_fe %*% xtilde)
+          v_pe <- as.vector(X_pe %*% xtilde)
+          Bii_fe_i <- sum((v_fe - mean(v_fe))^2)
+          Bii_pe_i <- sum((v_pe - mean(v_pe))^2)
+          Bii_cov_i <- sum((v_pe - mean(v_pe)) * (v_fe - mean(v_fe)))
 
           results[i,] <- c(Pii_i, Bii_fe_i, Bii_pe_i, Bii_cov_i)
         }

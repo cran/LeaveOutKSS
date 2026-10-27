@@ -21,7 +21,7 @@ leverages_parallel <- function(X_fe, X_pe, X, xx, type_algorithm, scale,
   NT <- nrow(X)
   tolProb=0.5;
 
-  numIterations <- 300
+  numIterations <- min(300L, max(dim(xx)))
   tol <- 1e-6
 
     .kss_progress(progress, "Parallel leverages: registering worker processes")
@@ -37,9 +37,11 @@ leverages_parallel <- function(X_fe, X_pe, X, xx, type_algorithm, scale,
                                 type = "CG", iter = numIterations, tol = tol, precond = 2,
                                 verbose = FALSE)
       Pii_i <- as.numeric(X[i, ] %*% xtilde)
-      Bii_fe_i <- as.numeric(Matrix::crossprod(X_fe %*% xtilde - mean(X_fe %*% xtilde))/(nrow(X_fe) - 1))
-      Bii_pe_i <- as.numeric(Matrix::crossprod(X_pe %*% xtilde - mean(X_pe %*% xtilde))/(nrow(X_pe) - 1))
-      Bii_cov_i <- as.numeric(Matrix::crossprod(X_pe %*% xtilde - mean(X_fe %*% xtilde))/(nrow(X_pe) - 1))
+      v_fe <- as.vector(X_fe %*% xtilde)
+      v_pe <- as.vector(X_pe %*% xtilde)
+      Bii_fe_i <- sum((v_fe - mean(v_fe))^2)
+      Bii_pe_i <- sum((v_pe - mean(v_pe))^2)
+      Bii_cov_i <- sum((v_pe - mean(v_pe)) * (v_fe - mean(v_fe)))
 
       c(Pii_i, Bii_fe_i, Bii_pe_i, Bii_cov_i)
     }

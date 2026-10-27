@@ -43,7 +43,7 @@ lincom_KSS <- function(y, X, Z, Transform, sigma_i, labels = NULL) {
   # COMPUTE
   xx <- t(X) %*% X # Equivalent to X'X in 'MATLAB'
   xy <- t(X) %*% y # Equivalent to X'y in 'MATLAB'
-  beta <- sanic::solve_cg(a = xx, b = as.vector(xy), type = "CG", iter = 1000, tol = 1e-10, precond = 2, verbose = FALSE)
+  beta <- sanic::solve_cg(a = xx, b = as.vector(xy), type = "CG", iter = min(1000L, max(dim(xx))), tol = 1e-10, precond = 2, verbose = FALSE)
   wy <- Transform %*% beta
   zz <- t(Z) %*% Z # Equivalent to Z'Z in 'MATLAB'
   if (anyNA(wy) || any(!is.finite(wy))) {
@@ -61,7 +61,7 @@ lincom_KSS <- function(y, X, Z, Transform, sigma_i, labels = NULL) {
     v <- qr.solve(zz, v)
     v <- Z %*% v
     v <- t(Transform) %*% v
-    right <- sanic::solve_cg(a = xx, b = as.vector(v), type = "CG", iter = 1000, tol = 1e-6, precond = 2, verbose = FALSE)
+    right <- sanic::solve_cg(a = xx, b = as.vector(v), type = "CG", iter = min(1000L, max(dim(xx))), tol = 1e-6, precond = 2, verbose = FALSE)
     left <- t(right)
     denominator[q] <- left %*% (t(X) %*% sigma_i %*% X) %*% right
     denominator_naive[q] <- left %*% (t(X) %*% sigma_i_naive %*% X %*% right)
